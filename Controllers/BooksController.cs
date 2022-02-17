@@ -1,106 +1,111 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using AutoMapper;
+using LibApp.Data;
+using LibApp.Dtos;
+using LibApp.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using LibApp.Models;
-using LibApp.ViewModels;
-using LibApp.Data;
+using LibApp.Interfaces;
+using LibApp.Repository;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
-namespace LibApp.Controllers
+namespace LibApp.Controllers.Api
 {
-    public class BooksController : Controller
+    [Route("api/[controller]")]
+    [ApiController]
+    public class BooksController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
-
-        public BooksController(ApplicationDbContext context)
+        public BooksController(ApplicationDbContext context, IMapper mapper, IBookRepo bookRepository)
         {
             _context = context;
+            _mapper = mapper;
+            _bookRepository = bookRepository;
+
+        }
+        // GET /api/books
+        [HttpGet]
+        [Authorize(Roles = "Admin")]
+        public IActionResult GetBooks()
+        {
+            var books = _bookRepository.GetBooks()
+                .ToList()
+                .Select(_mapper.Map<Book, BookDto>);
+
+            return Ok(books);
         }
 
-        public IActionResult Index()
+        // GET /api/books/{id}
+        [HttpGet("{id}", Name = "GetBooks")]
+        public async Task<IActionResult> GetBooks(int id)
         {
-            var books = _context.Books
-                .Include(b => b.Genre)
-                .ToList();
-
-            return View(books);
-        }
-
-        public IActionResult Details(int id)
-        {
-            var book = _context.Books
-                .Include(b => b.Genre)
-                .SingleOrDefault(b => b.Id == id);
-
+            Console.WriteLine("Request beginning");
+            var book = await _context.Books.SingleOrDefaultAsync(c => c.Id == id);
+            await Task.Delay(2000);
             if (book == null)
             {
-                return Content("Book not found");
+                throw new System.Web.Http.HttpResponseException(System.Net.HttpStatusCode.NotFound);
             }
 
-            return View(book);
+            Console.WriteLine("Request end");
+            return Ok(_mapper.Map<BookDto>(book));
         }
 
-        public IActionResult Edit(int id)
-        {
-            var book = _context.Books.SingleOrDefault(b => b.Id == id);
-            if (book == null)
-            {
-                return NotFound();
-            }
-
-            var viewModel = new BookFormViewModel
-            {
-                Book = book,
-                Genres = _context.Genre.ToList()
-            };
-
-            return View("BookForm", viewModel);
-        }
-
-        public IActionResult New()
-        {
-            var viewModel = new BookFormViewModel
-            {
-                Genres = _context.Genre.ToList()
-            };
-
-            return View("BookForm", viewModel);
-        }
-
+        // POST /api/books
         [HttpPost]
-        public IActionResult Save(Book book)
+        public IActionResult CreateBook(BookDto bookDto)
         {
-            if (book.Id == 0)
+            if (!ModelState.IsValid)
             {
-                book.DateAdded = DateTime.Now;
-                _context.Books.Add(book);
-            }
-            else
-            {
-                var bookInDb = _context.Books.Single(c => c.Id == book.Id);
-                bookInDb.Name = book.Name;
-                bookInDb.AuthorName = book.AuthorName;
-                bookInDb.GenreId= book.GenreId;
-                bookInDb.NumberInStock = book.NumberInStock;
-                bookInDb.ReleaseDate = book.ReleaseDate;
-                bookInDb.DateAdded = book.DateAdded;
+                return BadRequest();
             }
 
-            try
-            {
-                _context.SaveChanges();
-            }
-            catch (DbUpdateException e)
-            {
-                Console.WriteLine(e);
-            }
+            var book = _mapper.Map<Book>(bookDto);
+            _bookRepository.AddBook(book);
+            _bookRepository.Save();
+            bookDto.Id = book.Id;
 
-            return RedirectToAction("Index", "Books");
+            return CreatedAtRoute(nameof(GetBooks), new { id = bookDto.Id }, bookDto);
         }
 
+        // PUT /api/books
+        [HttpPut("{id}")]
+        public void UpdateBook(int id, BookDto bookDto)
+        {
+            if (!ModelState.IsValid)
+            {
+                throw new System.Web.Http.HttpResponseException(System.Net.HttpStatusCode.BadRequest);
+            }
 
+            var bookInDb = _context.Customers.SingleOrDefault(c => c.Id == id);
+            if (bookInDb == null)
+            {
+                throw new System.Web.Http.HttpResponseException(System.Net.HttpStatusCode.NotFound);
+            }
 
+            _mapper.Map(bookDto, bookInDb);
+            _context.SaveChanges();
+        }
+
+        // DELETE /api/books
+        [HttpDelete("{id}")]
+        public void DeleteBook(int id)
+        {
+            var bookInDb = _context.Books.SingleOrDefault(c => c.Id == id);
+            if (bookInDb == null)
+            {
+                throw new System.Web.Http.HttpResponseException(System.Net.HttpStatusCode.NotFound);
+            }
+
+            _context.Remove(bookInDb);
+            _context.SaveChanges();
+        }
+
+        private readonly ApplicationDbContext _context;
+        private readonly IMapper _mapper;
+        private readonly IBookRepo _bookRepository;
     }
 }

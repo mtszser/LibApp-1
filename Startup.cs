@@ -7,7 +7,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using LibApp.Controllers;
 using System;
+using LibApp.Repository;
+using LibApp.Interfaces;
 
 namespace LibApp
 {
@@ -32,6 +35,7 @@ namespace LibApp
 
             services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
                 .AddEntityFrameworkStores<ApplicationDbContext>();
+            services.AddScoped<IBookRepo, BookRepository>();
 
             services.AddControllersWithViews();
         }

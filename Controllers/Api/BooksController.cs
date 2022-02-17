@@ -1,40 +1,117 @@
-﻿using AutoMapper;
-using LibApp.Data;
-using LibApp.Dtos;
-using LibApp.Models;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using LibApp.Models;
+using LibApp.ViewModels;
+using LibApp.Data;
+using Microsoft.EntityFrameworkCore;
+using LibApp.Interfaces;
+using LibApp.Repository;
 
-namespace LibApp.Controllers.Api
+namespace LibApp.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class BooksController : ControllerBase
+    public class BooksController : Controller
     {
-        public BooksController(ApplicationDbContext context, IMapper mapper)
+        private readonly ApplicationDbContext _context;
+        private readonly IBookRepo _bookRepository;
+
+        public BooksController(ApplicationDbContext context, IBookRepo bookRepository)
         {
             _context = context;
-            _mapper = mapper;
+            _bookRepository = bookRepository;
+        }
+
+        public IActionResult Index()
+        {
+            var books = _bookRepository.GetBooks()
+                .ToList();
+
+            return View(books);
+        }
+
+        public IActionResult Details(int id)
+        {
+            var book = _bookRepository.GetBooks()
+                .SingleOrDefault(b => b.Id == id);
+
+            if (book == null)
+            {
+                return Content("Book not found");
+            }
+
+            return View(book);
+        }
+
+        public IActionResult Edit(int id)
+        {
+            var book = _bookRepository.GetBooks().SingleOrDefault(b => b.Id == id);
+            if (book == null)
+            {
+                return NotFound();
+            }
+
+            var viewModel = new BookFormViewModel
+            {
+                Book = book,
+                Genres = _context.Genre.ToList()
+            };
+
+            return View("BookForm", viewModel);
+        }
+
+        public IActionResult New()
+        {
+            var viewModel = new BookFormViewModel
+            {
+                Genres = _context.Genre.ToList()
+
+            };
+
+            return View("BookForm", viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Save(Book book)
+        {
+            if (book.Id == 0)
+            {
+                book.DateAdded = DateTime.Now;
+                _bookRepository.AddBook(book);
+            }
+            else
+            {
+                var bookInDb = _bookRepository.GetBooks().Single(c => c.Id == book.Id);
+                bookInDb.Name = book.Name;
+                bookInDb.AuthorName = book.AuthorName;
+                bookInDb.GenreId = book.GenreId;
+                bookInDb.NumberInStock = book.NumberInStock;
+                bookInDb.ReleaseDate = book.ReleaseDate;
+                bookInDb.DateAdded = book.DateAdded;
+            }
+
+            try
+            {
+                _context.SaveChanges();
+                _bookRepository.Save();
+            }
+            catch (DbUpdateException e)
+            {
+                Console.WriteLine(e);
+            }
+
+            return RedirectToAction("Index", "Books");
         }
 
         [HttpGet]
-        public IEnumerable<BookDto> GetBooks(string query = null) 
+        [Route("api/books")]
+        public IList<Book> GetBooks()
         {
-            var booksQuery = _context.Books.Where(b => b.NumberAvailable > 0);
-
-            if (!String.IsNullOrWhiteSpace(query))
-            {
-                booksQuery = booksQuery.Where(b => b.Name.Contains(query));
-            }
-
-            return booksQuery.ToList().Select(_mapper.Map<Book, BookDto>);
+            return _bookRepository.GetBooks().ToList();
         }
 
-        private readonly ApplicationDbContext _context;
-        private readonly IMapper _mapper;
+
     }
 }
