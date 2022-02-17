@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Linq;
-using LibApp.Data;
+using LibApp.Data; 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,6 +13,7 @@ namespace LibApp.Models
             using (var context = new ApplicationDbContext(
                 serviceProvider.GetRequiredService<DbContextOptions<ApplicationDbContext>>()))
             {
+                context.Database.EnsureCreated();
                 if (context.MembershipTypes.Any())
                 {
                     Console.WriteLine("Database already seeded");

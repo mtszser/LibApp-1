@@ -28,7 +28,9 @@ namespace LibApp.Controllers.Api
         }
         // GET /api/books
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles ="Administrator")]
+        [Authorize(Roles = "Librarian")]
+        [Authorize(Roles = "Manager")]
         public IActionResult GetBooks()
         {
             var books = _bookRepository.GetBooks()
